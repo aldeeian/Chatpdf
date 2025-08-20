@@ -1,49 +1,55 @@
-# ChatPDF
 
-Chat with any PDF. 
+## ChatPDF (Gemini + RAG)
+Turn any PDF into a chat experience. Drag-and-drop a PDF and ask questions; the app extracts text, builds embeddings, retrieves the most relevant chunks and answers using a Gemini model-grounded in your document.
 
-Easily upload the PDF documents you'd like to chat with. Instant answers. Ask questions, extract information, and summarize documents with AI. Sources included.
-
-### Tutorial -> https://www.youtube.com/watch?v=3aRc1ijrTVs
-
-Create app like [ChatPDF](https://www.thesamur.ai/chatpdf-alternative) or [PDF.ai](https://pdf.ai/) in less than 10 lines of code
-
-### Getting Started
-
-Code is up now, ⭐ (Star) the repo to receive updates
-
-Replit and streamlit version coming soon
-
-Follow [Anil Chandra Naidu Matcha](https://twitter.com/matchaman11) on twitter for updates
-
-Subscribe to https://www.youtube.com/@AnilChandraNaiduMatcha for more such video tutorials
-
-### How to run ? (Things might change based on OS)
-
+### Quick start
 1. Create a virtual environment in python https://docs.python.org/3/library/venv.html
-
 2. Run "pip install -r requirements.txt"
-
 3. Set OPENAI_API_KEY environment variable with your openai key
-
 4. Run "python main.py"
-
 5. Change pdf file and query in code if you want to try with any other content
-
 To run streamlit app, follow the steps run "streamlit run streamlitui.py"
 
-Parts of the streamlit code is inspired from [here](https://github.com/viniciusarruda/chatpdf)
+## Tech stack
+Frontend/UI: Streamlit
+RAG: LangChain (loaders, splitters, retriever)
+Embeddings: langchain-google-genai (Gemini embeddings)
+LLM: ChatGoogleGenerativeAI (Gemini)
+Vector store: FAISS (CPU) or in-memory fallback
+Language: Python 3.10+
 
-### Demo link
 
-https://heybot.thesamur.ai/
+## Features
+RAG pipeline: PDF → text → chunking → embeddings → vector index → top-k retrieval → grounded answer.
 
-### Also check
+Gemini models: generation with ChatGoogleGenerativeAI; embeddings with GoogleGenerativeAIEmbeddings.
 
-[Chat with Website code](https://github.com/Anil-matcha/Website-to-Chatbot)
+Grounded answers: strict QA prompt avoids hallucinations and generic “I can’t access files” replies.
 
-[Chat with CSV code](https://github.com/Anil-matcha/Chat-With-Excel)
+Windows-friendly: FAISS path + in-memory fallback to avoid heavy native deps on some machines.
 
-[Chat with Youtube code](https://github.com/Anil-matcha/Chat-Youtube)
+Streamlit UI: quick upload, chat history, and (optional) retrieved-chunk preview for debugging.
 
-[ChatGPT in Discord code](https://github.com/Anil-matcha/DiscordGPT)
+## How it works (brief)
+
+1.Ingest: PyPDFLoader reads all pages.
+
+2.Split: RecursiveCharacterTextSplitter (defaults: size 600–1000, overlap 150–200).
+
+3.Embed: Each chunk → embedding via GoogleGenerativeAIEmbeddings.
+
+4.Index: Chunks + embeddings inserted into FAISS (or in-memory index).
+
+5.Retrieve: Top-k by cosine similarity for the user question.
+
+6.Answer: Compose a strict QA prompt with the retrieved context → Gemini generates a concise answer.
+
+## Common issues & fixes
+
+1.404 model not found: your key doesn’t have that model. Run python list_gemini_models.py and set GEMINI_MODEL to one that appears and supports generateContent.
+
+2.Auth errors: ensure GEMINI_API_KEY is set in your shell (not committed).
+
+3.Windows build errors (FAISS): use the in-memory retriever path included in pdfquery.py (toggle via a flag), or install faiss-cpu wheels as pinned in requirements.txt.
+
+4.Blank/irrelevant answers: increase k, reduce chunk_size, or enable retrieved-chunk preview to verify the context is relevant.
