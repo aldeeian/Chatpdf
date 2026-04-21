@@ -1,63 +1,134 @@
-# pdfquery.py  (FAISS / HuggingFace / Gemini style)
+# pdfquery.py — FAISS / HuggingFace Embeddings / Groq LLM
 import os
+import time
 from typing import Optional
-from langchain.document_loaders import PyPDFLoader
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain import FAISS
 
-# configure genai (safe to call even if not used elsewhere)
-try:
-    import google.generativeai as genai
-except Exception:
-    genai = None
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_groq import ChatGroq
+
+_GROQ_MODEL  = "llama-3.3-70b-versatile"
+_EMBED_MODEL = "all-MiniLM-L6-v2"
+
 
 class PDFQuery:
-    def __init__(self, gemini_api_key: Optional[str] = None, gemini_model: Optional[str] = None, k: int = 4):
-        key = gemini_api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-        if key and genai is not None:
-            try:
-                genai.configure(api_key=key)
-            except Exception:
-                pass
-        if key:
-            os.environ["GEMINI_API_KEY"] = key
-            os.environ["GOOGLE_API_KEY"] = key
+    """RAG pipeline: ingest PDFs into FAISS, answer questions with Groq."""
 
-        # embeddings (local HF model)
-        self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-        # choose model id you found via list_models; default is the notebook's gemini-pro
-        self.gemini_model = gemini_model or os.environ.get("GEMINI_MODEL") or "gemini-pro"
-        self.llm = ChatGoogleGenerativeAI(model=self.gemini_model)
-        self.db = None
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        k: int = 4,
+    ):
+        key = api_key or os.environ.get("GROQ_API_KEY")
+        if key:
+            os.environ["GROQ_API_KEY"] = key
+
+        self.llm        = ChatGroq(model=_GROQ_MODEL)
+        self.embeddings = HuggingFaceEmbeddings(model_name=_EMBED_MODEL)
+        self.db: Optional[FAISS] = None
         self.k = int(k)
 
-    def ingest(self, file_path):
+    # ------------------------------------------------------------------
+    # Internal
+    # ------------------------------------------------------------------
+
+    def _invoke(self, prompt: str) -> str:
+        """Call the LLM; on a 429 rate-limit error wait 20 s and retry once."""
+        try:
+            result = self.llm.invoke(prompt)
+            return result.content if hasattr(result, "content") else str(result)
+        except Exception as exc:
+            msg = str(exc).lower()
+            if "429" in msg or "quota" in msg or "rate" in msg or "resource exhausted" in msg:
+                time.sleep(20)
+                result = self.llm.invoke(prompt)
+                return result.content if hasattr(result, "content") else str(result)
+            raise
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def ingest(self, file_path: str) -> None:
+        """Load a PDF and merge its chunks into the shared FAISS index.
+
+        Safe to call multiple times — each call adds to the existing index so
+        you can query across several PDFs at once.
+        """
         loader = PyPDFLoader(file_path)
-        pages = loader.load_and_split()
+        pages  = loader.load_and_split()
         if not pages:
-            raise ValueError("No pages loaded from PDF.")
-        # build FAISS DB
-        self.db = FAISS.from_documents(pages, self.embeddings)
+            raise ValueError(f"No pages loaded from {file_path}.")
+        if self.db is None:
+            self.db = FAISS.from_documents(pages, self.embeddings)
+        else:
+            self.db.add_documents(pages)
 
     def ask(self, question: str) -> str:
-        if self.db is None:
-            return "Please upload and ingest a PDF first."
-        docs = self.db.similarity_search(question, k=self.k)
-        content = "\n".join([d.page_content for d in docs])
-        qa_prompt = (
-            "Use the following pieces of context to answer the user. "
-            "If you don't know, say you don't know. Be factual and concise."
-        )
-        input_text = qa_prompt + "\nContext:\n" + content + "\nUser question:\n" + question
-        # notebook used llm.invoke
-        result = self.llm.invoke(input_text)
-        # ChatGoogleGenerativeAI.invoke returns an object; try to get text content
-        try:
-            return result.content
-        except Exception:
-            # fallback to string representation
-            return str(result)
+        """Return a plain answer string. Kept for backward compatibility."""
+        answer, _ = self.ask_with_sources(question)
+        return answer
 
-    def forget(self):
+    def ask_with_sources(self, question: str) -> tuple[str, list[dict]]:
+        """Return (answer, sources).
+
+        Each source dict contains:
+            content – first 400 chars of the retrieved chunk
+            page    – 0-based page number from the original PDF
+            source  – file path / name the chunk came from
+        """
+        if self.db is None:
+            return "Please upload and ingest a PDF first.", []
+
+        docs    = self.db.similarity_search(question, k=self.k)
+        context = "\n\n".join(d.page_content for d in docs)
+        prompt  = (
+            "Use the context excerpts below to answer the question. "
+            "If the answer is not found in the context, say you don't know. "
+            "Be factual and concise.\n\n"
+            f"Context:\n{context}\n\n"
+            f"Question: {question}"
+        )
+        answer  = self._invoke(prompt)
+        sources = [
+            {
+                "content": d.page_content[:400],
+                "page":    d.metadata.get("page", "?"),
+                "source":  d.metadata.get("source", "unknown"),
+            }
+            for d in docs
+        ]
+        return answer, sources
+
+    def get_document_summary(self) -> str:
+        """Return a 3-bullet summary of the ingested documents.
+
+        Samples a broad cross-section of chunks so the summary covers the
+        whole document, not just the first few pages.
+        Returns an empty string if no documents are loaded or the call fails.
+        """
+        if self.db is None:
+            return ""
+
+        docs    = self.db.similarity_search(
+            "main topic overview introduction purpose key findings", k=8
+        )
+        context = "\n\n".join(d.page_content for d in docs)
+        prompt  = (
+            "Based on the document excerpts below, write exactly 3 concise bullet points "
+            "summarizing the main topics, key findings, or purpose of this document. "
+            "Use this exact format:\n"
+            "• [First key point]\n"
+            "• [Second key point]\n"
+            "• [Third key point]\n\n"
+            f"Excerpts:\n{context}"
+        )
+        try:
+            return self._invoke(prompt)
+        except Exception:
+            return ""
+
+    def forget(self) -> None:
+        """Clear the FAISS index (removes all ingested documents)."""
         self.db = None
