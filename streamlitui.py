@@ -47,7 +47,7 @@ _TYPING_HTML = """
 _CSS = """
 <style>
 /* ── Global ──────────────────────────────────────────────────────────── */
-#MainMenu, footer, header { visibility: hidden; }
+#MainMenu, footer { visibility: hidden; }
 
 .main .block-container {
     padding-top: 1.5rem;
