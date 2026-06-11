@@ -1,8 +1,11 @@
 # ChatPDF — RAG-powered PDF Q&A
 
 [![tests](https://github.com/aldeeian/Chatpdf/actions/workflows/tests.yml/badge.svg)](https://github.com/aldeeian/Chatpdf/actions/workflows/tests.yml)
+[![live demo](https://img.shields.io/badge/live%20demo-chatpdf--saif.streamlit.app-FF4B4B?logo=streamlit&logoColor=white)](https://chatpdf-saif.streamlit.app/)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![LLM](https://img.shields.io/badge/LLM-LLaMA%203.3%2070B%20via%20Groq-green)
+
+### 🚀 [Try it live → chatpdf-saif.streamlit.app](https://chatpdf-saif.streamlit.app/) — no install, no API key needed.
 
 Turn any PDF into a chat. Upload one or more PDFs and ask questions — the app extracts text, builds a FAISS vector index, retrieves the most relevant chunks, and answers using **LLaMA 3.3 70B (via Groq)** grounded strictly in your document. Every answer shows the exact source chunks and page numbers it was built from.
 

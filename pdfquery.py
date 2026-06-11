@@ -55,16 +55,22 @@ class PDFQuery:
     # Public API
     # ------------------------------------------------------------------
 
-    def ingest(self, file_path: str) -> None:
+    def ingest(self, file_path: str, display_name: Optional[str] = None) -> None:
         """Load a PDF and merge its chunks into the shared FAISS index.
 
         Safe to call multiple times — each call adds to the existing index so
         you can query across several PDFs at once.
+
+        display_name: original filename to show in sources (useful when the
+        PDF was saved to a temporary path before ingestion).
         """
         loader = PyPDFLoader(file_path)
         pages  = loader.load_and_split()
         if not pages:
             raise ValueError(f"No pages loaded from {file_path}.")
+        if display_name:
+            for page in pages:
+                page.metadata["source"] = display_name
         if self.db is None:
             self.db = FAISS.from_documents(pages, self.embeddings)
         else:

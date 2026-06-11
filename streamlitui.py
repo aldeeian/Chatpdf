@@ -48,6 +48,7 @@ _CSS = """
 <style>
 /* ── Global ──────────────────────────────────────────────────────────── */
 #MainMenu, footer { visibility: hidden; }
+[data-testid="stSidebarCollapsedControl"] { visibility: visible !important; }
 
 .main .block-container {
     padding-top: 1.5rem;
@@ -397,7 +398,7 @@ def _ingest_uploaded_files(files) -> None:
             path = tmp.name
         try:
             progress.progress((i + 0.3) / total, text=f"Embedding {file.name}…")
-            pq.ingest(path)
+            pq.ingest(path, display_name=file.name)
             st.session_state["uploaded_filenames"].append(file.name)
         except Exception as exc:
             st.sidebar.error(f"{file.name}: {exc}")
