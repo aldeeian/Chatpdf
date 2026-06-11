@@ -4,8 +4,13 @@ import time
 from typing import Optional
 
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
+
+try:
+    # Maintained package (langchain-community embeddings are deprecated)
+    from langchain_huggingface import HuggingFaceEmbeddings
+except ImportError:  # fallback for older environments
+    from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
 
 _GROQ_MODEL  = "llama-3.3-70b-versatile"

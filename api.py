@@ -29,7 +29,7 @@ from pdfquery import PDFQuery
 
 app = FastAPI(
     title="ChatPDF API",
-    description="RAG-powered PDF question-answering via Gemini + FAISS.",
+    description="RAG-powered PDF question-answering via Groq (LLaMA 3.3 70B) + FAISS.",
     version="1.0.0",
 )
 
@@ -147,7 +147,7 @@ async def upload_document(file: UploadFile = File(...)) -> DocumentInfo:
 async def query_document(request: QueryRequest) -> QueryResponse:
     """Send a natural-language question together with a ``document_id``.
 
-    Returns the Gemini-generated answer plus the top-k source chunks that
+    Returns the LLM-generated answer plus the top-k source chunks that
     were used to produce it.
 
     Raises 404 if the document ID is not found.

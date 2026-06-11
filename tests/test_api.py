@@ -4,7 +4,7 @@ tests/test_api.py — pytest suite for the ChatPDF FastAPI backend.
 Run with:
     pytest tests/ -v
 
-The PDFQuery class is mocked throughout so no Gemini API key is needed and
+The PDFQuery class is mocked throughout so no Groq API key is needed and
 no real FAISS indexing happens — we are testing the API layer (routing,
 validation, error handling) not the RAG pipeline itself.
 """

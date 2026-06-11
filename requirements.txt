@@ -6,6 +6,7 @@ langchain-groq>=0.1.0
 # ── Vector store & embeddings ────────────────────────────────────────────────
 faiss-cpu>=1.7.4
 sentence-transformers>=2.7.0
+langchain-huggingface>=0.1.0
 
 
 # ── PDF processing ───────────────────────────────────────────────────────────
