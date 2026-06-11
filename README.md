@@ -88,11 +88,36 @@ streamlit run streamlitui.py
 Opens at `http://localhost:8501`. Enter your API key in the sidebar (or set `GROQ_API_KEY` first), upload PDFs, and start chatting.
 
 **Features:**
+- **Streaming answers** — responses type out live, token by token
+- **Conversation memory** — ask follow-ups like "explain the second one in detail"
+- **Suggested questions** — 3 clickable example questions auto-generated from your document
+- **Relevance scores** — every source chunk shows how closely it matched your question
 - Multiple PDF uploads in one session — query across all of them at once
 - Auto-generated 3-bullet document summary on upload
 - Finance Mode — one-click prompts for financial analysis
+- **Export chat** — download the whole conversation as a Markdown file
 - Source transparency — every answer shows the exact chunks and pages retrieved
-- Chat history that persists through the session
+
+---
+
+## Run with Docker
+
+```bash
+docker build -t chatpdf .
+docker run -p 8501:8501 -e GROQ_API_KEY=your_key chatpdf
+```
+
+Then open `http://localhost:8501`.
+
+---
+
+## Deploy your own (free)
+
+1. Fork this repo
+2. Go to [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub
+3. **New app** → pick the repo → main file `streamlitui.py`
+4. In **Advanced settings → Secrets**, add: `GROQ_API_KEY = "your_key"`
+5. Deploy — you get a public URL anyone can use
 
 ---
 

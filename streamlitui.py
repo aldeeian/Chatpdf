@@ -360,6 +360,7 @@ def _init_session() -> None:
         "uploaded_filenames": [],
         "finance_mode":      False,
         "doc_summary":       None,
+        "suggested_questions": [],
         "pending_question":  None,
     }
     for key, val in defaults.items():
@@ -414,22 +415,32 @@ def _ingest_uploaded_files(files) -> None:
     except Exception:
         pass
 
+    # Auto-generate clickable example questions
+    try:
+        st.session_state["suggested_questions"] = pq.suggest_questions(3)
+    except Exception:
+        st.session_state["suggested_questions"] = []
+
 
 def _process_question(question: str) -> None:
-    """Run the RAG query with a live typing indicator, save results, rerun."""
+    """Run the RAG query with a live streaming answer, save results, rerun."""
     _render_user_bubble(question)
 
-    typing_ph = st.empty()
-    typing_ph.markdown(_TYPING_HTML, unsafe_allow_html=True)
+    # Last 6 messages give the model context for follow-up questions.
+    history = [
+        {"role": m["role"], "content": m["content"]}
+        for m in st.session_state["messages"][-6:]
+    ]
 
     try:
-        answer, sources = st.session_state["pdfquery"].ask_with_sources(question)
+        token_gen, sources = st.session_state["pdfquery"].ask_stream(
+            question, history=history
+        )
+        with st.chat_message("assistant"):
+            answer = st.write_stream(token_gen)  # live typing effect
     except Exception as exc:
-        typing_ph.empty()
         st.error(f"Query failed: {exc}")
         return
-
-    typing_ph.empty()
 
     st.session_state["messages"].append({"role": "user",      "content": question, "sources": []})
     st.session_state["messages"].append({"role": "assistant", "content": answer,   "sources": sources})
@@ -457,7 +468,9 @@ def _render_sources(sources: list) -> None:
     with st.expander(label):
         for idx, src in enumerate(sources, start=1):
             fname = os.path.basename(src["source"])
-            st.caption(f"**Chunk {idx}** · {_e(fname)} · page {src['page']}")
+            score = src.get("relevance")
+            score_txt = f" · relevance {score}" if score is not None else ""
+            st.caption(f"**Chunk {idx}** · {_e(fname)} · page {src['page']}{score_txt}")
             st.code(src["content"], language=None)
             if idx < len(sources):
                 st.divider()
@@ -502,7 +515,7 @@ def _render_sidebar() -> None:
             type="password",
             key="_api_key_input",
             label_visibility="collapsed",
-            placeholder="AIza…",
+            placeholder="gsk_…",
         )
         st.markdown(
             '<span class="model-badge">⚡ llama-3.3-70b-versatile</span>',
@@ -515,6 +528,7 @@ def _render_sidebar() -> None:
             st.session_state["messages"]          = []
             st.session_state["uploaded_filenames"] = []
             st.session_state["doc_summary"]       = None
+            st.session_state["suggested_questions"] = []
             st.rerun()
 
         if not st.session_state["GROQ_API_KEY"]:
@@ -575,6 +589,20 @@ def _render_sidebar() -> None:
 
         st.divider()
 
+        # ── Export chat ──────────────────────────────────────────────────
+        if st.session_state["messages"]:
+            export_lines = ["# ChatPDF conversation\n"]
+            for m in st.session_state["messages"]:
+                who = "**You**" if m["role"] == "user" else "**ChatPDF**"
+                export_lines.append(f"{who}: {m['content']}\n")
+            st.download_button(
+                "⬇️ Export chat (.md)",
+                data="\n".join(export_lines),
+                file_name="chatpdf_conversation.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+
         if st.button("🗑️ Clear chat", use_container_width=True):
             st.session_state["messages"]    = []
             st.session_state["doc_summary"] = None
@@ -633,6 +661,13 @@ def main() -> None:
     # ── Document summary ──────────────────────────────────────────────────
     if st.session_state.get("doc_summary"):
         _render_summary(st.session_state["doc_summary"])
+
+    # ── Suggested questions (shown until the first message is sent) ──────
+    if st.session_state.get("suggested_questions") and not st.session_state["messages"]:
+        st.caption("💡 Try asking:")
+        for i, q in enumerate(st.session_state["suggested_questions"]):
+            if st.button(q, key=f"suggested_{i}", use_container_width=True):
+                st.session_state["pending_question"] = q
 
     # ── Chat history ──────────────────────────────────────────────────────
     _render_chat()
